@@ -189,61 +189,71 @@ def get_project_start(project_name):
     return creation if '.' not in creation else creation.split('.')[0]
     # return '{0}T00:00:00'.format(creation)
 
-def main():
-    print('gathering accounts from {}db...'.format(MODE))
-    logging.info('gathering data from {}db...'.format(MODE))
+print('gathering accounts from {}db...'.format(MODE))
+logging.info('gathering data from {}db...'.format(MODE))
 
-    # NOTE(vir): ignore abc and vector for now
-    project_table = paginate_requests(PROJECT_ENDPOINT)
-    project_table = filter(
-        lambda p: p['name'] != 'abc' and not p['name'].startswith('vector_'),
-        project_table)
-    for project in project_table:
-        project['allocation'] = get_project_allocation(project['name'])
-        project['start'] = get_project_start(project['name'])
+# NOTE(vir): ignore abc and vector for now
+project_table = paginate_requests(PROJECT_ENDPOINT)
+project_table = filter(
+    lambda p: p['name'] != 'abc' and not p['name'].startswith('vector_'),
+    project_table)
 
-    # NOTE(vir): can use this to update fca.conf file
-    '''
-    lines = []
-    for project in project_table:
-        if ('allocation' not in project) or ('name' not in project) or (project['allocation'] == None):
-            print('[project: {}] ERR, could not set allocation (value={})'.format(project['name'], project['allocation']))
-            logging.error('[project: {}] ERR, could not set allocation (value={})'.format(project['name'], project['allocation']))
-            continue
 
-        lines.append('{}|{}|{}|Initial Allocation for {}'.format(
-            project['name'], project['start'], project['allocation'], project['name']))
-    '''
+commands = ''
+for project in project_table:
+    project['allocation'] = get_project_allocation(project['name'])
+    project['start'] = get_project_start(project['name'])
 
-    print('writing data to file (slurmdb commands)...')
-    logging.info('writing data to file (slurmdb commands)...')
+    if ('allocation' not in project) or ('name' not in project) or (project['allocation'] == None):
+        print('[project: {0}] ERR, could not set allocation (value={1})'.format(project['name'], project['allocation']))
+        logging.error('[project: {0}] ERR, could not set allocation (value={1})'.format(project['name'], project['allocation']))
+        continue
 
-    commands = ''
-    for project in project_table:
-        if ('allocation' not in project) or ('name' not in project) or (project['allocation'] == None):
-            print('[project: {0}] ERR, could not set allocation (value={1})'.format(project['name'], project['allocation']))
-            logging.error('[project: {0}] ERR, could not set allocation (value={1})'.format(project['name'], project['allocation']))
-            continue
+    allocation_in_seconds = 60 * project['allocation']
+    command = 'yes | sacctmgr modify account {0} set GrpTRESMins="cpu={1}"'.format(project['name'], allocation_in_seconds)
+    commands += '\n' + command
 
-        allocation_in_seconds = 60 * project['allocation']
-        command = 'yes | sacctmgr modify account {0} set GrpTRESMins="cpu={1}"'.format(project['name'], allocation_in_seconds)
-        commands += '\n' + command
+# NOTE(vir): can use this to update fca.conf file
+'''
+lines = []
+for project in project_table:
+    if ('allocation' not in project) or ('name' not in project) or (project['allocation'] == None):
+        print('[project: {}] ERR, could not set allocation (value={})'.format(project['name'], project['allocation']))
+        logging.error('[project: {}] ERR, could not set allocation (value={})'.format(project['name'], project['allocation']))
+        continue
 
-        # NOTE(vir): actually update data in SLURM
-        # out, _ = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True).communicate()
-        # print('updated account: {}, allocation set to: {}, with error: {}'.format(project['name'], project['allocation'], out))
-        # logging.info('updated account: {}, allocation set to: {}, with error: {}'.format(project['name'], project['allocation'], out))
+    lines.append('{}|{}|{}|Initial Allocation for {}'.format(
+        project['name'], project['start'], project['allocation'], project['name']))
+'''
 
-    # print('updated allocation limits for {} accounts, run complete, exiting...'.format(len(project_table)))
-    # logging.info('updated allocation limits for {} accounts, run complete, exiting...'.format(len(project_table)))
+print('writing data to file (slurmdb commands)...')
+logging.info('writing data to file (slurmdb commands)...')
 
-    with open('reverse_sync_output_{}.sh'.format(MODE), 'w') as f:
-        f.writelines(commands)
+'''
+commands = ''
+for project in project_table:
+    if ('allocation' not in project) or ('name' not in project) or (project['allocation'] == None):
+        print('[project: {0}] ERR, could not set allocation (value={1})'.format(project['name'], project['allocation']))
+        logging.error('[project: {0}] ERR, could not set allocation (value={1})'.format(project['name'], project['allocation']))
+        continue
 
-    print('run complete, wrote output to reverse_sync_output_{}.sh, exiting...'.format(MODE))
-    logging.info('run complete, wrote output to reverse_sync_output_{}.sh, exiting...'.format(MODE))
+    allocation_in_seconds = 60 * project['allocation']
+    command = 'yes | sacctmgr modify account {0} set GrpTRESMins="cpu={1}"'.format(project['name'], allocation_in_seconds)
+    commands += '\n' + command
 
-    # sacctmgr modify account <account_name> set GrpTRESMins="cpu=xxxx"
+    # NOTE(vir): actually update data in SLURM
+    # out, _ = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True).communicate()
+    # print('updated account: {}, allocation set to: {}, with error: {}'.format(project['name'], project['allocation'], out))
+    # logging.info('updated account: {}, allocation set to: {}, with error: {}'.format(project['name'], project['allocation'], out))
 
-if __name__ == '__main__':
-    main()
+'''
+# print('updated allocation limits for {} accounts, run complete, exiting...'.format(len(project_table)))
+# logging.info('updated allocation limits for {} accounts, run complete, exiting...'.format(len(project_table)))
+
+with open('reverse_sync_output_{}.sh'.format(MODE), 'w') as f:
+    f.writelines(commands)
+
+print('run complete, wrote output to reverse_sync_output_{}.sh, exiting...'.format(MODE))
+logging.info('run complete, wrote output to reverse_sync_output_{}.sh, exiting...'.format(MODE))
+
+# sacctmgr modify account <account_name> set GrpTRESMins="cpu=xxxx"
